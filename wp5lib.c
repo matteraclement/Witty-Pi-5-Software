@@ -546,7 +546,7 @@ int i2c_write_stream_util(int i2c_dev, uint8_t index, uint8_t * buf, int size, u
     }
     int i, len;
     for (i = 0; i < size; i ++) {
-        if (-1 == i2c_set_impl(i2c_dev, index, buf[i], false)) {
+        if (!i2c_set_impl(i2c_dev, index, buf[i], false)) {
             i = -2;
             break;
         }
@@ -589,18 +589,20 @@ int get_wittypi_model(void) {
     }
     int fw_id = -1;
     int attempts = 0;
-    while(fw_id == -1) {
+    while (fw_id == -1) {
         fw_id = i2c_get_impl(dev, I2C_FW_ID, false);
-        attempts ++;
+        attempts++;
+        if (fw_id != -1) {
+            break;
+        }
         if (attempts >= 3) {
+            close_i2c_device(dev);
             log_mode = bk_mode;
-			return MODEL_UNKNOWN;
-		}
-		if (fw_id == -1) {
-		    usleep(100000);
-	    }
+            return MODEL_UNKNOWN;
+        }
+        usleep(100000);
     }
-    close(dev);
+    close_i2c_device(dev);
     log_mode = bk_mode;
     switch (fw_id) {
         case FW_ID_WITTYPI_5:
@@ -1250,6 +1252,97 @@ bool run_admin_command(uint16_t psw_cmd) {
 	result &= i2c_set_impl(i2c_dev, I2C_ADMIN_COMMAND, cmd, false);
     close_i2c_device(i2c_dev);
     return result;
+}
+
+
+/**
+ * Run administrative command and wait for completion.
+ *
+ * @param psw_cmd The 16 bit integer that stores password and command
+ * @param status Optional pointer to receive I2C_ADMIN_CONTEXT status
+ * @return true if the command was issued and a terminal status was observed, false otherwise
+ */
+bool run_admin_command_wait(uint16_t psw_cmd, uint8_t *status) {
+    int i2c_dev = open_i2c_device();
+    if (i2c_dev < 0) {
+        return false;
+    }
+
+    int initial = i2c_get_impl(i2c_dev, I2C_ADMIN_CONTEXT, false);
+    uint8_t psw = (uint8_t)(psw_cmd >> 8);
+    uint8_t cmd = (uint8_t)(psw_cmd & 0xFF);
+    bool result = true;
+    result &= i2c_set(i2c_dev, I2C_ADMIN_PASSWORD, psw);
+    result &= i2c_set_impl(i2c_dev, I2C_ADMIN_COMMAND, cmd, false);
+    if (!result) {
+        close_i2c_device(i2c_dev);
+        return false;
+    }
+
+    int waited_ms = 0;
+    int prev = -1;
+    bool started = false;
+    int current = initial;
+
+    while (waited_ms <= 8000) {
+        current = i2c_get_impl(i2c_dev, I2C_ADMIN_CONTEXT, false);
+        if (current == ADMIN_STATUS_BUSY) {
+            started = true;
+            prev = -1;
+        } else if (current >= 0) {
+            if (!started && current == initial) {
+                prev = -1;
+            } else {
+                started = true;
+                if (current == prev) {
+                    if (status) {
+                        *status = (uint8_t)current;
+                    }
+                    close_i2c_device(i2c_dev);
+                    return true;
+                }
+                prev = current;
+            }
+        }
+        usleep(10000);
+        waited_ms += 10;
+    }
+
+    if (status) {
+        *status = (uint8_t)((current < 0) ? 0xFF : current);
+    }
+    close_i2c_device(i2c_dev);
+    return false;
+}
+
+
+/**
+ * Get firmware version.
+ *
+ * @param major Optional pointer to receive the major version
+ * @param minor Optional pointer to receive the minor version
+ * @return true if the version was read successfully, false otherwise
+ */
+bool get_firmware_version(int *major, int *minor) {
+    int i2c_dev = open_i2c_device();
+    if (i2c_dev < 0) {
+        return false;
+    }
+
+    int major_value = i2c_get(i2c_dev, I2C_FW_VERSION_MAJOR);
+    int minor_value = i2c_get(i2c_dev, I2C_FW_VERSION_MINOR);
+    close_i2c_device(i2c_dev);
+
+    if (major_value < 0 || minor_value < 0) {
+        return false;
+    }
+    if (major) {
+        *major = major_value;
+    }
+    if (minor) {
+        *minor = minor_value;
+    }
+    return true;
 }
 
 

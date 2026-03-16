@@ -10,8 +10,8 @@
 #define BIT_VALUE(bit) (1 << (bit))
 
 #define SOFTWARE_VERSION_MAJOR	5
-#define SOFTWARE_VERSION_MINOR	0
-#define SOFTWARE_VERSION_PATCH  0
+#define SOFTWARE_VERSION_MINOR	1
+#define SOFTWARE_VERSION_PATCH  1
 
 #define SOFTWARE_VERSION_STR    TO_STRING(SOFTWARE_VERSION_MAJOR) "." TO_STRING(SOFTWARE_VERSION_MINOR) "." TO_STRING(SOFTWARE_VERSION_PATCH)
 
@@ -171,6 +171,19 @@
 #define I2C_ADMIN_PWD_CMD_LIST_FILES                0xA0F1
 #define I2C_ADMIN_PWD_CMD_CHOOSE_SCRIPT             0xA159
 #define I2C_ADMIN_PWD_CMD_PURGE_SCRIPT              0xA260
+#define I2C_ADMIN_PWD_CMD_FILE_UPLOAD               0xA355
+#define I2C_ADMIN_PWD_CMD_FILE_DOWNLOAD             0xA456
+#define I2C_ADMIN_PWD_CMD_FILE_DELETE               0xA557
+#define I2C_ADMIN_PWD_CMD_FILE_DOWNLOAD_NEXT        0xA560
+
+#define ADMIN_STATUS_OK                             0x00
+#define ADMIN_STATUS_FILE_NOT_FOUND                 0x01
+#define ADMIN_STATUS_CANNOT_DELETE_ACTIVE           0x02
+#define ADMIN_STATUS_IO_ERROR                       0x03
+#define ADMIN_STATUS_INVALID_PACKET                 0x04
+#define ADMIN_STATUS_FILE_TOO_LARGE                 0x05
+#define ADMIN_STATUS_INVALID_DIRECTORY              0x06
+#define ADMIN_STATUS_BUSY                           0xFE
 
 
 /*
@@ -626,6 +639,26 @@ bool set_recovery_voltage_threshold(float threshold);
  * @return true if succeed, false if fail
  */
 bool run_admin_command(uint16_t psw_cmd);
+
+
+/**
+ * Run administrative command and wait for completion.
+ *
+ * @param psw_cmd The 16 bit integer that stores password and command
+ * @param status Optional pointer to receive I2C_ADMIN_CONTEXT status
+ * @return true if the command was issued and a terminal status was observed, false otherwise
+ */
+bool run_admin_command_wait(uint16_t psw_cmd, uint8_t *status);
+
+
+/**
+ * Get firmware version.
+ *
+ * @param major Optional pointer to receive the major version
+ * @param minor Optional pointer to receive the minor version
+ * @return true if the version was read successfully, false otherwise
+ */
+bool get_firmware_version(int *major, int *minor);
 
 
 /**
